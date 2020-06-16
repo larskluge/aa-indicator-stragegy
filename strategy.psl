@@ -1,0 +1,171 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © daywalker7754
+
+//@version=4
+strategy(title="AA - Indicator Strategy", shorttitle="Indicator Strategy", overlay=false, default_qty_type=strategy.percent_of_equity, default_qty_value=100, initial_capital=100000)
+
+// Variables
+low_border_30 = 30
+low_border_20 = 20
+high_border_70 = 70
+high_border_80 = 80
+
+pjm = input(title="Use PJM Original", type=input.bool, defval=true)
+
+//************************* Money Flow *************************
+mf_length = input(title="Length for MoneyFlow", type=input.integer, defval=15, minval=1, maxval=2000)
+
+if (pjm)
+    mf_length := 20
+
+src = hlc3
+upper = sum(volume * (change(src) <= 0 ? 0 : src), mf_length)
+lower = sum(volume * (change(src) >= 0 ? 0 : src), mf_length)
+mf = rsi(upper, lower)
+
+// ************************* RSI *************************
+rsiLength = input(title="Length for RSI", type=input.integer, defval=5, minval=1, maxval=100)
+
+if (pjm)
+    rsiLength := 14
+
+vrsi = rsi(close, rsiLength)
+
+
+// ************************* Fast Stochastic *************************
+stoch_length = input(5, minval=1, title = "Fast Stochastic Interval")
+fastD = input(3, minval=1, title = "Fast Stochastic Smoothening")
+
+if (pjm)
+    stoch_length := 14
+    fastD := 3
+
+vFast = ema(stoch(close, high, low, stoch_length),3)
+
+// ************************* Slow Stochastic *************************
+s_stoch_length = input(10, minval=1, title = "Slow Stochastic Interval")
+slowD = input(10, minval=1, title = "Slow Stochastic Smoothening")
+
+if (pjm)
+    s_stoch_length := 35
+    slowD := 10
+
+vSlow = ema(stoch(close, high, low, s_stoch_length),slowD)
+
+// ************************* MACD *************************
+fast_length = input(title="MACD fast length", type=input.integer, defval=10)
+slow_length = input(title="MACD slow length", type=input.integer, defval=35)
+signal_length = input(title="Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 5)
+
+if (pjm)
+    fast_length := 10
+    slow_length := 35
+    signal_length := 5
+
+fast_ma = ema(close, fast_length)
+slow_ma = ema(close, slow_length)
+macd = fast_ma - slow_ma
+signal = ema(macd, signal_length)
+hist = macd - signal
+
+// ************************* EMA *************************
+ema10_len = input(10, minval=1, title="EMA Length Fast")
+ema10 = ema(close, ema10_len)
+ema20_len = input(20, minval=1, title="EMA Length Slow")
+ema20 = ema(close, ema20_len)
+
+// ************************* Plot the charts *************************
+
+plot(vSlow, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
+plot(vFast, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
+plot(mf, color=color.orange, title="MFI", linewidth=3, transp=0)
+plot(vrsi, color=color.purple, title="RSI", linewidth=3, transp=0)
+
+col_grow_above = #26A69A
+col_grow_below = #FFCDD2
+col_fall_above = #B2DFDB
+col_fall_below = #EF5350
+col_macd = #0094ff
+col_signal = #ff6a00
+// plot(hist, title="MACDs", style=plot.style_columns, color=(hist>=0 ? (hist[1] < hist ? col_grow_above : col_fall_above) : (hist[1] < hist ? col_grow_below : col_fall_below) ), transp=0 )
+
+h20 = hline(20)
+h30 = hline(30)
+h70 = hline(70)
+h80 = hline(80)
+fill(h30, h70, color=color.red, transp=90)
+fill(h20, h30, color=color.orange, transp=90)
+fill(h70, h80, color=color.orange, transp=90)
+
+// ************************* Own indicators and alarm for buy and sell signals *************************
+vFast_buy_signal = false
+if (crossover(vFast[0], low_border_20) or crossover(vFast[1], low_border_20) or crossover(vFast[2], low_border_20) or crossover(vFast[3], low_border_20) or crossover(vFast[4], low_border_20))
+    vFast_buy_signal := true
+
+vFast_sell_signal = false
+if (crossunder(vFast[0], high_border_80) or crossunder(vFast[1], high_border_80) or crossunder(vFast[2], high_border_80) or crossunder(vFast[3], high_border_80) or crossunder(vFast[4], high_border_80))
+    vFast_sell_signal := true
+
+rsi_buy_signal = false
+if (crossover(vrsi[0], low_border_30) or crossover(vrsi[1], low_border_30) or crossover(vrsi[2], low_border_30) or crossover(vrsi[3], low_border_30) or crossover(vrsi[4], low_border_30))
+    rsi_buy_signal := true
+
+rsi_sell_signal = false
+if (crossunder(vrsi[0], high_border_70) or crossunder(vrsi[1], high_border_70) or crossunder(vrsi[2], high_border_70) or crossunder(vrsi[3], high_border_70) or crossunder(vrsi[4], high_border_70))
+    rsi_sell_signal := true
+
+vSlow_buy_signal = false
+if (crossover(vSlow[0], low_border_20) or crossover(vSlow[1], low_border_20) or crossover(vSlow[2], low_border_20))
+    vSlow_buy_signal := true
+
+vSlow_sell_signal = false
+if (crossunder(vSlow[0], high_border_80) or crossunder(vSlow[1], high_border_80) or crossunder(vSlow[2], high_border_80))
+    vSlow_sell_signal := true
+
+mf_buy_signal = false
+if (crossover(mf[0], low_border_20) or crossover(mf[1], low_border_20))
+    mf_buy_signal := true
+
+mf_sell_signal = false
+if (crossunder(mf[0], high_border_80) or crossunder(mf[1], high_border_80))
+    mf_sell_signal := true
+
+
+buy_signal = vFast_buy_signal and rsi_buy_signal and (vSlow_buy_signal or mf_buy_signal)
+sell_signal = vFast_sell_signal and rsi_sell_signal and (vSlow_sell_signal or mf_sell_signal)
+
+plot(buy_signal ?100:0, linewidth=3, color=color.white, transp=40)
+plot(sell_signal ?0:100, linewidth=3, color=color.maroon, transp=40)
+
+alertcondition(buy_signal, title='Buy Signal', message="Buy signal - {{exchange}}:{{ticker}}, Price = {{close}}")
+alertcondition(sell_signal, title='Sell Signal', message="Sell signal - {{exchange}}:{{ticker}}, Price = {{close}}")
+
+// Strategy & Backtest in a specific date range
+
+// Set the date for the backtest
+startDate = input(title="Start Date", type=input.integer, defval=1, minval=1, maxval=31)
+startMonth = input(title="Start Month", type=input.integer, defval=1, minval=1, maxval=12)
+startYear = input(title="Start Year", type=input.integer, defval=2010, minval=1800, maxval=2100)
+
+endDate = input(title="End Date", type=input.integer, defval=31, minval=1, maxval=31)
+endMonth = input(title="End Month", type=input.integer, defval=01, minval=1, maxval=12)
+endYear = input(title="End Year", type=input.integer, defval=2020, minval=1800, maxval=2100)
+
+inDateRange = (time >= timestamp(syminfo.timezone, startYear, startMonth, startDate, 0, 0)) and (time < timestamp(syminfo.timezone, endYear, endMonth, endDate, 0, 0))
+
+// Parameters for the strategy
+//longProfitPerc = input(title="Long Take Profit (%)", minval=0.0, step=0.5, defval=60) / 100
+//longExitPrice  = strategy.position_avg_price * (1 + longProfitPerc)
+longStoppLoss = input(title="Long Stop Loss (%)", minval=0.0, step=0.5, defval=20)/100
+stopExitPrice = strategy.position_avg_price * (1 - longStoppLoss)
+
+
+if (inDateRange and buy_signal)
+    strategy.entry("Long", strategy.long)
+
+if (strategy.position_size > 0 and sell_signal)
+    // strategy.exit(id="Long", stop=stopExitPrice, limit=longExitPrice)
+    strategy.close("Long")
+
+if (strategy.position_size > 0 and not sell_signal)
+    strategy.exit(id="Long", stop=stopExitPrice)
