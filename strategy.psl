@@ -11,10 +11,13 @@ high_border_70 = 70
 high_border_80 = 80
 
 pjm = input(title="Use PJM Original", type=input.bool, defval=true)
-rsi = input(title="Use RSI", type=input.bool, defval=true)
-moneyf = input(title="Use Money Flow", type=input.bool, defval=true)
-fast = input(title="Use Fast Stochastic", type=input.bool, defval=true)
-slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
+
+use_rsi = input(title="Use RSI", type=input.bool, defval=true)
+use_moneyf = input(title="Use Money Flow", type=input.bool, defval=true)
+use_fast = input(title="Use Fast Stochastic", type=input.bool, defval=true)
+use_slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
+use_macd = input(title="Use MACD (signal count only, no graph)", type=input.bool, defval=true)
+
 signals = input(title="How many signals have to be right?", type=input.integer, defval=3)
 
 long = input(title="Test of Long Strategy?", type=input.bool, defval=true)
@@ -64,18 +67,17 @@ vSlow = ema(stoch(close, high, low, s_stoch_length),slowD)
 // ************************* MACD *************************
 fast_length = input(title="MACD fast length", type=input.integer, defval=10)
 slow_length = input(title="MACD slow length", type=input.integer, defval=35)
-signal_length = input(title="Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 5)
+signal_length = input(title="MACD Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 5)
 
 if (pjm)
     fast_length := 10
     slow_length := 35
     signal_length := 5
 
-fast_ma = ema(close, fast_length)
-slow_ma = ema(close, slow_length)
-macd = fast_ma - slow_ma
-signal = ema(macd, signal_length)
-hist = macd - signal
+[_macd, _signal, macd_hist] = macd(close, 10, 35, 5)
+
+macd_growing = macd_hist[1] < macd_hist
+
 
 // ************************* EMA *************************
 ema10_len = input(10, minval=1, title="EMA Length Fast")
@@ -85,19 +87,18 @@ ema20 = ema(close, ema20_len)
 
 // ************************* Plot the charts *************************
 
-plot(rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=3, transp=0)
-plot(moneyf ? mf : na, color=color.orange, title="MFI", linewidth=3, transp=0)
-plot(fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
-plot(slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
+plot(use_rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=3, transp=0)
+plot(use_moneyf ? mf : na, color=color.orange, title="MFI", linewidth=3, transp=0)
+plot(use_fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
+plot(use_slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
 
 
-col_grow_above = #26A69A
-col_grow_below = #FFCDD2
-col_fall_above = #B2DFDB
-col_fall_below = #EF5350
-col_macd = #0094ff
-col_signal = #ff6a00
-// plot(hist, title="MACDs", style=plot.style_columns, color=(hist>=0 ? (hist[1] < hist ? col_grow_above : col_fall_above) : (hist[1] < hist ? col_grow_below : col_fall_below) ), transp=0 )
+// col_grow_above = #26A69A
+// col_grow_below = #FFCDD2
+// col_fall_above = #B2DFDB
+// col_fall_below = #EF5350
+// macd_color = macd_hist >= 0 ? (macd_growing ? col_grow_above : col_fall_above) : (macd_growing ? col_grow_below : col_fall_below)
+// plot(use_macd ? macd_hist : na, title="MACD", style=plot.style_columns, color=macd_color, transp=0)
 
 h20 = hline(20)
 h30 = hline(30)
@@ -140,41 +141,45 @@ mf_sell_signal = 0
 if (crossunder(mf[0], high_border_80) or crossunder(mf[1], high_border_80))
     mf_sell_signal := 1
 
+macd_buy_signal = 0
+if macd_hist <= 0 and macd_growing
+    macd_buy_signal := 1
+
+macd_sell_signal = 0
+if macd_hist >= 0 and not macd_growing
+    macd_sell_signal := 1
 
 // ************************* Should it be taken into account? *************************
 
-if rsi == false
+if not use_rsi
     rsi_buy_signal := 0
     rsi_sell_signal := 0
 
-if moneyf == false
+if not use_moneyf
     mf_buy_signal := 0
     mf_sell_signal := 0
 
-if fast == false
+if not use_fast
     vFast_buy_signal := 0
     vFast_sell_signal := 0
 
-if slow == false
+if not use_slow
     vSlow_buy_signal := 0
     vSlow_sell_signal := 0
 
-
-buy_signal_criteria = vFast_buy_signal + rsi_buy_signal + vSlow_buy_signal + mf_buy_signal
-sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal + mf_sell_signal
-
-buy_signal = false
-sell_signal = false
-
-if (buy_signal_criteria >= signals)
-    buy_signal := true
-
-if (sell_signal_criteria >= signals)
-    sell_signal := true
+if not use_macd
+    macd_buy_signal := 0
+    macd_sell_signal := 0
 
 
-plot(buy_signal ?100:0, linewidth=3, color=color.green, transp=40, title="Buy Signal")
-plot(sell_signal ?0:100, linewidth=3, color=color.maroon, transp=40, title="Sell Signal")
+buy_signal_criteria = vFast_buy_signal + rsi_buy_signal + vSlow_buy_signal + mf_buy_signal + macd_buy_signal
+sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal + mf_sell_signal + macd_sell_signal
+
+buy_signal = buy_signal_criteria >= signals
+sell_signal = sell_signal_criteria >= signals
+
+plot(buy_signal ? 100 : 0, linewidth=3, color=color.green, transp=40, title="Buy Signal")
+plot(sell_signal ? 0 : 100, linewidth=3, color=color.maroon, transp=40, title="Sell Signal")
 
 alertcondition(buy_signal, title='Buy Signal', message="Buy signal - {{exchange}}:{{ticker}}, Price = {{close}}")
 alertcondition(sell_signal, title='Sell Signal', message="Sell signal - {{exchange}}:{{ticker}}, Price = {{close}}")
@@ -208,7 +213,6 @@ if long
 
     if (strategy.position_size > 0 and not sell_signal)
         strategy.exit(id="Long", stop=stopExitPrice)
-
 
 if short
     if (inDateRange and sell_signal)
