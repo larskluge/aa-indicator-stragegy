@@ -14,16 +14,22 @@ default_line_width = 2
 
 pjm = input(title="Use PJM Original", type=input.bool, defval=true)
 
-use_rsi = input(title="Use RSI", type=input.bool, defval=true)
-use_moneyf = input(title="Use Money Flow", type=input.bool, defval=true)
 use_fast = input(title="Use Fast Stochastic", type=input.bool, defval=true)
 use_slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
+use_rsi = input(title="Use RSI", type=input.bool, defval=true)
+use_mf = input(title="Use Money Flow", type=input.bool, defval=true)
 use_macd = input(title="Use MACD (signal count only, no graph)", type=input.bool, defval=true)
 
-signals = input(title="How many signals have to be right?", type=input.integer, defval=3)
+historical_bars_to_consider_for_fast_stoch = input(title="Historical bars for signal [Fast Stoch]", type=input.integer, defval=5, minval=0)
+historical_bars_to_consider_for_slow_stoch = input(title="Historical bars for signal [Slow Stoch]", type=input.integer, defval=3, minval=0)
+historical_bars_to_consider_for_rsi = input(title="Historical bars for signal [RSI]", type=input.integer, defval=5, minval=0)
+historical_bars_to_consider_for_mf = input(title="Historical bars for signal [Money Flow]", type=input.integer, defval=2, minval=0)
+historical_bars_to_consider_for_macd = input(title="Historical bars for signal [MACD]", type=input.integer, defval=1, minval=0)
 
 long = input(title="Test of Long Strategy?", type=input.bool, defval=true)
 short = input(title="Test of Short Strategy?", type=input.bool, defval=false)
+
+signals = input(title="How many signals have to be right?", type=input.integer, defval=3)
 
 
 //************************* Money Flow *************************
@@ -110,75 +116,80 @@ fill(h30, h70, color=color.red, transp=90)
 fill(h20, h30, color=color.orange, transp=90)
 fill(h70, h80, color=color.orange, transp=90)
 
+
 // ************************* Own indicators and alarm for buy and sell signals *************************
-vFast_buy_signal = 0
-if (crossover(vFast[0], low_border_20) or crossover(vFast[1], low_border_20) or crossover(vFast[2], low_border_20) or crossover(vFast[3], low_border_20) or crossover(vFast[4], low_border_20))
-    vFast_buy_signal := 1
 
-vFast_sell_signal = 0
-if (crossunder(vFast[0], high_border_80) or crossunder(vFast[1], high_border_80) or crossunder(vFast[2], high_border_80) or crossunder(vFast[3], high_border_80) or crossunder(vFast[4], high_border_80))
-    vFast_sell_signal := 1
+var buy_signal_fast_stoch = false
+var buy_signal_slow_stoch = false
+var buy_signal_rsi = false
+var buy_signal_mf = false
+var buy_signal_macd = false
 
-rsi_buy_signal = 0
-if (crossover(vrsi[0], low_border_30) or crossover(vrsi[1], low_border_30) or crossover(vrsi[2], low_border_30) or crossover(vrsi[3], low_border_30) or crossover(vrsi[4], low_border_30))
-    rsi_buy_signal := 1
+var sell_signal_fast_stoch = false
+var sell_signal_slow_stoch = false
+var sell_signal_rsi = false
+var sell_signal_mf = false
+var sell_signal_macd = false
 
-rsi_sell_signal = 0
-if (crossunder(vrsi[0], high_border_70) or crossunder(vrsi[1], high_border_70) or crossunder(vrsi[2], high_border_70) or crossunder(vrsi[3], high_border_70) or crossunder(vrsi[4], high_border_70))
-    rsi_sell_signal := 1
 
-vSlow_buy_signal = 0
-if (crossover(vSlow[0], low_border_20) or crossover(vSlow[1], low_border_20) or crossover(vSlow[2], low_border_20))
-    vSlow_buy_signal := 1
+buy_signal_fast_stoch := crossover(vFast, low_border_20)
+sell_signal_fast_stoch := crossunder(vFast, high_border_80)
 
-vSlow_sell_signal = 0
-if (crossunder(vSlow[0], high_border_80) or crossunder(vSlow[1], high_border_80) or crossunder(vSlow[2], high_border_80))
-    vSlow_sell_signal := 1
+buy_signal_slow_stoch := crossover(vSlow, low_border_20)
+sell_signal_slow_stoch := crossunder(vSlow, high_border_80)
 
-mf_buy_signal = 0
-if (crossover(mf[0], low_border_20) or crossover(mf[1], low_border_20))
-    mf_buy_signal := 1
+buy_signal_rsi := crossover(vrsi, low_border_30)
+sell_signal_rsi := crossunder(vrsi, high_border_70)
 
-mf_sell_signal = 0
-if (crossunder(mf[0], high_border_80) or crossunder(mf[1], high_border_80))
-    mf_sell_signal := 1
+buy_signal_mf := crossover(mf, low_border_20)
+sell_signal_mf := crossunder(mf, high_border_80)
 
-macd_buy_signal = 0
-if macd_hist <= 0 and macd_growing
-    macd_buy_signal := 1
+buy_signal_macd := macd_hist <= 0 and macd_growing
+sell_signal_macd := macd_hist >= 0 and not macd_growing
 
-macd_sell_signal = 0
-if macd_hist >= 0 and not macd_growing
-    macd_sell_signal := 1
 
 // ************************* Should it be taken into account? *************************
 
-if not use_rsi
-    rsi_buy_signal := 0
-    rsi_sell_signal := 0
-
-if not use_moneyf
-    mf_buy_signal := 0
-    mf_sell_signal := 0
-
 if not use_fast
-    vFast_buy_signal := 0
-    vFast_sell_signal := 0
+    historical_bars_to_consider_for_fast_stoch := 0
 
 if not use_slow
-    vSlow_buy_signal := 0
-    vSlow_sell_signal := 0
+    historical_bars_to_consider_for_slow_stoch := 0
+
+if not use_rsi
+    historical_bars_to_consider_for_rsi := 0
+
+if not use_mf
+    historical_bars_to_consider_for_mf := 0
 
 if not use_macd
-    macd_buy_signal := 0
-    macd_sell_signal := 0
+    historical_bars_to_consider_for_macd := 0
 
 
-buy_signal_criteria = vFast_buy_signal + rsi_buy_signal + vSlow_buy_signal + mf_buy_signal + macd_buy_signal
-sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal + mf_sell_signal + macd_sell_signal
 
-buy_signal = buy_signal_criteria >= signals
-sell_signal = sell_signal_criteria >= signals
+signal(series, historical_bars) =>
+    use = false
+    for i = 0 to historical_bars - 1
+        use := use or series[i]
+    use ? 1 : 0
+
+
+count_buy_signals = signal(buy_signal_fast_stoch, historical_bars_to_consider_for_fast_stoch)
+                  + signal(buy_signal_slow_stoch, historical_bars_to_consider_for_slow_stoch)
+                  + signal(buy_signal_rsi, historical_bars_to_consider_for_rsi)
+                  + signal(buy_signal_mf, historical_bars_to_consider_for_mf)
+                  + signal(buy_signal_macd, historical_bars_to_consider_for_macd)
+
+count_sell_signals = signal(sell_signal_fast_stoch, historical_bars_to_consider_for_fast_stoch)
+                   + signal(sell_signal_slow_stoch, historical_bars_to_consider_for_slow_stoch)
+                   + signal(sell_signal_rsi, historical_bars_to_consider_for_rsi)
+                   + signal(sell_signal_mf, historical_bars_to_consider_for_mf)
+                   + signal(sell_signal_macd, historical_bars_to_consider_for_macd)
+
+
+
+buy_signal = count_buy_signals >= signals
+sell_signal = count_sell_signals >= signals
 
 plot(buy_signal ? 100 : 0, linewidth=default_line_width, color=color.green, transp=40, title="Buy Signal")
 plot(sell_signal ? 0 : 100, linewidth=default_line_width, color=color.maroon, transp=40, title="Sell Signal")
