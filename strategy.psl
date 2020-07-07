@@ -9,6 +9,8 @@ low_border_30 = 30
 low_border_20 = 20
 high_border_70 = 70
 high_border_80 = 80
+default_line_width = 2
+
 
 pjm = input(title="Use PJM Original", type=input.bool, defval=true)
 
@@ -87,10 +89,10 @@ ema20 = ema(close, ema20_len)
 
 // ************************* Plot the charts *************************
 
-plot(use_rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=3, transp=0)
-plot(use_moneyf ? mf : na, color=color.orange, title="MFI", linewidth=3, transp=0)
-plot(use_fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
-plot(use_slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
+plot(use_rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=default_line_width, transp=0)
+plot(use_mf ? mf : na, color=color.orange, title="MFI", linewidth=default_line_width, transp=0)
+plot(use_fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=default_line_width, transp=0)
+plot(use_slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=default_line_width, transp=0)
 
 
 // col_grow_above = #26A69A
@@ -178,8 +180,8 @@ sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal +
 buy_signal = buy_signal_criteria >= signals
 sell_signal = sell_signal_criteria >= signals
 
-plot(buy_signal ? 100 : 0, linewidth=3, color=color.green, transp=40, title="Buy Signal")
-plot(sell_signal ? 0 : 100, linewidth=3, color=color.maroon, transp=40, title="Sell Signal")
+plot(buy_signal ? 100 : 0, linewidth=default_line_width, color=color.green, transp=40, title="Buy Signal")
+plot(sell_signal ? 0 : 100, linewidth=default_line_width, color=color.maroon, transp=40, title="Sell Signal")
 
 alertcondition(buy_signal, title='Buy Signal', message="Buy signal - {{exchange}}:{{ticker}}, Price = {{close}}")
 alertcondition(sell_signal, title='Sell Signal', message="Sell signal - {{exchange}}:{{ticker}}, Price = {{close}}")
