@@ -10,11 +10,23 @@ low_border_20 = 20
 high_border_70 = 70
 high_border_80 = 80
 
-pjm = input(title="Use PJM Original", type=input.bool, defval=true)
-rsi = input(title="Use RSI", type=input.bool, defval=true)
-moneyf = input(title="Use Money Flow", type=input.bool, defval=true)
-fast = input(title="Use Fast Stochastic", type=input.bool, defval=true)
-slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
+pjm = input(title="Use PJM Original", type=input.bool, defval=false)
+
+use_rsi = input(title="Use RSI", type=input.bool, defval=true)
+rsi_days = input(title="RSI Bars", type=input.integer, defval=5, minval=1)
+
+use_moneyf = input(title="Use Money Flow", type=input.bool, defval=true)
+mf_days = input(title="Money Flow Bars", type=input.integer, defval=2, minval=1)
+
+use_fast = input(title="Use Fast Stochastic", type=input.bool, defval=true)
+fast_days = input(title="Fast Stochastic Bars", type=input.integer, defval=5, minval=1)
+
+use_slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
+slow_days = input(title="Slow Stochastic Bars", type=input.integer, defval=3, minval=1)
+
+use_macd = input(title="Use MACD (signal count only, no graph)", type=input.bool, defval=false)
+plot_macd = input(title="Show MACD graph", type=input.bool, defval=false)
+
 signals = input(title="How many signals have to be right?", type=input.integer, defval=3)
 
 long = input(title="Test of Long Strategy?", type=input.bool, defval=true)
@@ -26,6 +38,7 @@ mf_length = input(title="Length for MoneyFlow", type=input.integer, defval=15, m
 
 if (pjm)
     mf_length := 20
+    mf_days := 7
 
 src = hlc3
 upper = sum(volume * (change(src) <= 0 ? 0 : src), mf_length)
@@ -37,6 +50,7 @@ rsiLength = input(title="Length for RSI", type=input.integer, defval=5, minval=1
 
 if (pjm)
     rsiLength := 14
+    rsi_days := 7
 
 vrsi = rsi(close, rsiLength)
 
@@ -48,6 +62,7 @@ fastD = input(3, minval=1, title = "Fast Stochastic Smoothening")
 if (pjm)
     stoch_length := 14
     fastD := 3
+    fast_days := 7
 
 vFast = ema(stoch(close, high, low, stoch_length),fastD)
 
@@ -58,24 +73,24 @@ slowD = input(10, minval=1, title = "Slow Stochastic Smoothening")
 if (pjm)
     s_stoch_length := 35
     slowD := 10
+    slow_days := 7
 
 vSlow = ema(stoch(close, high, low, s_stoch_length),slowD)
 
 // ************************* MACD *************************
 fast_length = input(title="MACD fast length", type=input.integer, defval=10)
 slow_length = input(title="MACD slow length", type=input.integer, defval=35)
-signal_length = input(title="Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 5)
+signal_length = input(title="MACD Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 5)
 
 if (pjm)
     fast_length := 10
     slow_length := 35
     signal_length := 5
 
-fast_ma = ema(close, fast_length)
-slow_ma = ema(close, slow_length)
-macd = fast_ma - slow_ma
-signal = ema(macd, signal_length)
-hist = macd - signal
+[_macd, _signal, macd_hist] = macd(close, 10, 35, 5)
+
+macd_growing = macd_hist[1] < macd_hist
+
 
 // ************************* EMA *************************
 ema10_len = input(10, minval=1, title="EMA Length Fast")
@@ -85,19 +100,10 @@ ema20 = ema(close, ema20_len)
 
 // ************************* Plot the charts *************************
 
-plot(rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=3, transp=0)
-plot(moneyf ? mf : na, color=color.orange, title="MFI", linewidth=3, transp=0)
-plot(fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
-plot(slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
-
-
-col_grow_above = #26A69A
-col_grow_below = #FFCDD2
-col_fall_above = #B2DFDB
-col_fall_below = #EF5350
-col_macd = #0094ff
-col_signal = #ff6a00
-// plot(hist, title="MACDs", style=plot.style_columns, color=(hist>=0 ? (hist[1] < hist ? col_grow_above : col_fall_above) : (hist[1] < hist ? col_grow_below : col_fall_below) ), transp=0 )
+plot(use_rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=3, transp=0)
+plot(use_moneyf ? mf : na, color=color.orange, title="MFI", linewidth=3, transp=0)
+plot(use_fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=3, transp=0)
+plot(use_slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=3, transp=0)
 
 h20 = hline(20)
 h30 = hline(30)
@@ -108,73 +114,112 @@ fill(h20, h30, color=color.orange, transp=90)
 fill(h70, h80, color=color.orange, transp=90)
 
 // ************************* Own indicators and alarm for buy and sell signals *************************
+// ******************* Fast Stochastic *******************
 vFast_buy_signal = 0
-if (crossover(vFast[0], low_border_20) or crossover(vFast[1], low_border_20) or crossover(vFast[2], low_border_20) or crossover(vFast[3], low_border_20) or crossover(vFast[4], low_border_20))
-    vFast_buy_signal := 1
+for i = 0 to fast_days
+    if crossover(vFast, low_border_20)[i]
+        vFast_buy_signal := 1
 
 vFast_sell_signal = 0
-if (crossunder(vFast[0], high_border_80) or crossunder(vFast[1], high_border_80) or crossunder(vFast[2], high_border_80) or crossunder(vFast[3], high_border_80) or crossunder(vFast[4], high_border_80))
-    vFast_sell_signal := 1
+for i = 0 to fast_days
+    if crossunder(vFast, high_border_80)[i]
+        vFast_sell_signal := 1
 
+// ******************* RSI *******************
 rsi_buy_signal = 0
-if (crossover(vrsi[0], low_border_30) or crossover(vrsi[1], low_border_30) or crossover(vrsi[2], low_border_30) or crossover(vrsi[3], low_border_30) or crossover(vrsi[4], low_border_30))
-    rsi_buy_signal := 1
+for i = 0 to rsi_days
+    if crossover(vrsi, low_border_30)[i]
+        rsi_buy_signal := 1
 
 rsi_sell_signal = 0
-if (crossunder(vrsi[0], high_border_70) or crossunder(vrsi[1], high_border_70) or crossunder(vrsi[2], high_border_70) or crossunder(vrsi[3], high_border_70) or crossunder(vrsi[4], high_border_70))
-    rsi_sell_signal := 1
+for i = 0 to rsi_days
+    if crossunder(vrsi, high_border_70)[i]
+        rsi_sell_signal := 1
 
+// ******************* Slow Stochastic *******************
 vSlow_buy_signal = 0
-if (crossover(vSlow[0], low_border_20) or crossover(vSlow[1], low_border_20) or crossover(vSlow[2], low_border_20))
-    vSlow_buy_signal := 1
+for i = 0 to slow_days
+    if crossover(vSlow, low_border_20)[i]
+        vSlow_buy_signal := 1
 
 vSlow_sell_signal = 0
-if (crossunder(vSlow[0], high_border_80) or crossunder(vSlow[1], high_border_80) or crossunder(vSlow[2], high_border_80))
-    vSlow_sell_signal := 1
+for i = 0 to slow_days
+    if crossunder(vSlow, high_border_80)[i]
+        vSlow_sell_signal := 1
+
+// ******************* Money Flow *******************
 
 mf_buy_signal = 0
-if (crossover(mf[0], low_border_20) or crossover(mf[1], low_border_20))
-    mf_buy_signal := 1
+for i = 0 to mf_days
+    if crossover(mf, low_border_20)[i]
+        mf_buy_signal := 1
 
 mf_sell_signal = 0
-if (crossunder(mf[0], high_border_80) or crossunder(mf[1], high_border_80))
-    mf_sell_signal := 1
+for i = 0 to mf_days
+    if crossunder(mf, high_border_80)[i]
+        mf_sell_signal := 1
+
+
+// ******************* MACDS *******************
+
+
+macd_buy_signal = 0
+if macd_hist <= 0 and macd_growing
+    macd_buy_signal := 1
+
+macd_sell_signal = 0
+if macd_hist >= 0 and not macd_growing
+    macd_sell_signal := 1
+
+
+//Normalize Function when min/max unknown
+normalize(_src, _min, _max) =>
+    // Normalizes series with unknown min/max using historical min/max.
+    // _src: series to rescale.
+    // _min: minimum value of rescaled series.
+    // _max: maximum value of rescaled series.
+    var _historicMin = +10e10
+    var _historicMax = -10e10
+    _historicMin := min(nz(_src, _historicMin), _historicMin)
+    _historicMax := max(nz(_src, _historicMax), _historicMax)
+    _min + (_max - _min) * (_src - _historicMin) / max(_historicMax - _historicMin, 10e-10)
+
+
+macd_easy = macd_hist >= 0 ? color.green : color.red
+plot(plot_macd ? normalize(macd_hist, 0,100) : na, title="MACD's", style=plot.style_columns, color=color.red, histbase=50.0, color=macd_easy ,transp=0, linewidth=1)
 
 
 // ************************* Should it be taken into account? *************************
 
-if rsi == false
+if not use_rsi
     rsi_buy_signal := 0
     rsi_sell_signal := 0
 
-if moneyf == false
+if not use_moneyf
     mf_buy_signal := 0
     mf_sell_signal := 0
 
-if fast == false
+if not use_fast
     vFast_buy_signal := 0
     vFast_sell_signal := 0
 
-if slow == false
+if not use_slow
     vSlow_buy_signal := 0
     vSlow_sell_signal := 0
 
-
-buy_signal_criteria = vFast_buy_signal + rsi_buy_signal + vSlow_buy_signal + mf_buy_signal
-sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal + mf_sell_signal
-
-buy_signal = false
-sell_signal = false
-
-if (buy_signal_criteria >= signals)
-    buy_signal := true
-
-if (sell_signal_criteria >= signals)
-    sell_signal := true
+if not use_macd
+    macd_buy_signal := 0
+    macd_sell_signal := 0
 
 
-plot(buy_signal ?100:0, linewidth=3, color=color.green, transp=40, title="Buy Signal")
-plot(sell_signal ?0:100, linewidth=3, color=color.maroon, transp=40, title="Sell Signal")
+buy_signal_criteria = vFast_buy_signal + rsi_buy_signal + vSlow_buy_signal + mf_buy_signal + macd_buy_signal
+sell_signal_criteria = vFast_sell_signal + rsi_sell_signal + vSlow_sell_signal + mf_sell_signal + macd_sell_signal
+
+buy_signal = buy_signal_criteria >= signals
+sell_signal = sell_signal_criteria >= signals
+
+plot(buy_signal ? 100 : 0, linewidth=3, color=color.green, transp=40, title="Buy Signal")
+plot(sell_signal ? 0 : 100, linewidth=3, color=color.maroon, transp=40, title="Sell Signal")
 
 alertcondition(buy_signal, title='Buy Signal', message="Buy signal - {{exchange}}:{{ticker}}, Price = {{close}}")
 alertcondition(sell_signal, title='Sell Signal', message="Sell signal - {{exchange}}:{{ticker}}, Price = {{close}}")
@@ -188,7 +233,7 @@ startYear = input(title="Start Year", type=input.integer, defval=2010, minval=18
 
 endDate = input(title="End Date", type=input.integer, defval=31, minval=1, maxval=31)
 endMonth = input(title="End Month", type=input.integer, defval=01, minval=1, maxval=12)
-endYear = input(title="End Year", type=input.integer, defval=2020, minval=1800, maxval=2100)
+endYear = input(title="End Year", type=input.integer, defval=2099, minval=1800, maxval=2100)
 
 inDateRange = (time >= timestamp(syminfo.timezone, startYear, startMonth, startDate, 0, 0)) and (time < timestamp(syminfo.timezone, endYear, endMonth, endDate, 0, 0))
 
@@ -208,7 +253,6 @@ if long
 
     if (strategy.position_size > 0 and not sell_signal)
         strategy.exit(id="Long", stop=stopExitPrice)
-
 
 if short
     if (inDateRange and sell_signal)
