@@ -168,10 +168,13 @@ if not use_macd
 
 
 signal(series, historical_bars) =>
-    use = false
-    for i = 0 to historical_bars - 1
-        use := use or series[i]
-    use ? 1 : 0
+    if historical_bars > 0
+        use = false
+        for i = 0 to historical_bars - 1
+            use := use or series[i]
+        use ? 1 : 0
+    else
+        0
 
 
 count_buy_signals = signal(buy_signal_fast_stoch, historical_bars_to_consider_for_fast_stoch)
