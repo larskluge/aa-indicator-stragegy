@@ -19,12 +19,14 @@ use_slow = input(title="Use Slow Stochastic", type=input.bool, defval=true)
 use_rsi = input(title="Use RSI", type=input.bool, defval=true)
 use_mf = input(title="Use Money Flow", type=input.bool, defval=true)
 use_macd = input(title="Use MACD (signal count only, no graph)", type=input.bool, defval=true)
+use_williams = input(title="Use % Williams", type=input.bool, defval=true)
 
 historical_bars_to_consider_for_fast_stoch = input(title="Historical bars for signal [Fast Stoch]", type=input.integer, defval=5, minval=0)
 historical_bars_to_consider_for_slow_stoch = input(title="Historical bars for signal [Slow Stoch]", type=input.integer, defval=3, minval=0)
 historical_bars_to_consider_for_rsi = input(title="Historical bars for signal [RSI]", type=input.integer, defval=5, minval=0)
 historical_bars_to_consider_for_mf = input(title="Historical bars for signal [Money Flow]", type=input.integer, defval=2, minval=0)
 historical_bars_to_consider_for_macd = input(title="Historical bars for signal [MACD]", type=input.integer, defval=1, minval=0)
+historical_bars_to_consider_for_williams = input(title="Historical bars for %Williams", type=input.integer, defval=3, minval=0)
 
 long = input(title="Test of Long Strategy?", type=input.bool, defval=true)
 short = input(title="Test of Short Strategy?", type=input.bool, defval=false)
@@ -93,13 +95,21 @@ ema10 = ema(close, ema10_len)
 ema20_len = input(20, minval=1, title="EMA Length Slow")
 ema20 = ema(close, ema20_len)
 
+// ************************* % Williams *************************
+
+williams_len = input(defval=14, title="Williams Length", minval=1)
+
+wil_up  = highest(williams_len)
+wil_lo  = lowest(williams_len)
+wil     = 100 - (100 * (close - wil_up) / (wil_up - wil_lo) * -1)
+
 // ************************* Plot the charts *************************
 
 plot(use_rsi ? vrsi : na, color=color.purple, title="RSI", linewidth=default_line_width, transp=0)
 plot(use_mf ? mf : na, color=color.orange, title="MFI", linewidth=default_line_width, transp=0)
 plot(use_fast ? vFast : na, color=color.red, title="Fast Stochastic", linewidth=default_line_width, transp=0)
 plot(use_slow ? vSlow : na, color=color.green, title="Slow Stochastic", linewidth=default_line_width, transp=0)
-
+plot(use_williams ? wil : na, title="Williams %R", color=color.white, linewidth=1)
 
 // col_grow_above = #26A69A
 // col_grow_below = #FFCDD2
@@ -124,12 +134,14 @@ var buy_signal_slow_stoch = false
 var buy_signal_rsi = false
 var buy_signal_mf = false
 var buy_signal_macd = false
+var buy_signal_williams = false
 
 var sell_signal_fast_stoch = false
 var sell_signal_slow_stoch = false
 var sell_signal_rsi = false
 var sell_signal_mf = false
 var sell_signal_macd = false
+var sell_signal_williams = false
 
 
 buy_signal_fast_stoch := crossover(vFast, low_border_20)
@@ -146,6 +158,9 @@ sell_signal_mf := crossunder(mf, high_border_80)
 
 buy_signal_macd := macd_hist <= 0 and macd_growing
 sell_signal_macd := macd_hist >= 0 and not macd_growing
+
+buy_signal_williams := crossover(wil, low_border_20)
+sell_signal_williams := crossunder(wil, high_border_80)
 
 
 // ************************* Should it be taken into account? *************************
@@ -165,7 +180,8 @@ if not use_mf
 if not use_macd
     historical_bars_to_consider_for_macd := 0
 
-
+if not use_williams
+    historical_bars_to_consider_for_williams := 0
 
 signal(series, historical_bars) =>
     if historical_bars > 0
@@ -182,12 +198,14 @@ count_buy_signals = signal(buy_signal_fast_stoch, historical_bars_to_consider_fo
                   + signal(buy_signal_rsi, historical_bars_to_consider_for_rsi)
                   + signal(buy_signal_mf, historical_bars_to_consider_for_mf)
                   + signal(buy_signal_macd, historical_bars_to_consider_for_macd)
+                  + signal(buy_signal_williams, historical_bars_to_consider_for_williams)
 
 count_sell_signals = signal(sell_signal_fast_stoch, historical_bars_to_consider_for_fast_stoch)
                    + signal(sell_signal_slow_stoch, historical_bars_to_consider_for_slow_stoch)
                    + signal(sell_signal_rsi, historical_bars_to_consider_for_rsi)
                    + signal(sell_signal_mf, historical_bars_to_consider_for_mf)
                    + signal(sell_signal_macd, historical_bars_to_consider_for_macd)
+                   + signal(sell_signal_williams, historical_bars_to_consider_for_williams)
 
 
 
